@@ -317,7 +317,7 @@ class GaussianRandomPathClass():
         """
         # Eps-runup
         t_anchor = np.array([[0.0,eps_sec,dur_sec-eps_sec,dur_sec]]).T
-        x_anchor = np.random.rand(n_data_prior, dim)
+        x_anchor = np.random.uniform(low=-1, high=1, size=(n_data_prior, dim))
         x_anchor[:,:] = (x_anchor[0,:]+x_anchor[-1,:])/2
         l_anchor = np.array([[1,1,1,1]]).T
         n_test   = int(dur_sec*HZ)
