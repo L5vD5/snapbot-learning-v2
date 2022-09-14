@@ -67,6 +67,8 @@ def rollout(env, PID, traj_scale, n_traj_repeat, RENDER=False, PLOT=False):
         for tick in range(L):
             PID.update(x_trgt=traj_scale[tick,:], t_curr=env.get_time(), x_curr=env.get_joint_pos_deg())
             _, every_reward, done, rwd_detail = env.step(PID.out())
+            if done:
+                break
             if env.condition is not None:
                 forward_rewards.append(every_reward[0])
                 left_rewards.append(every_reward[1])
@@ -86,6 +88,8 @@ def rollout(env, PID, traj_scale, n_traj_repeat, RENDER=False, PLOT=False):
         t_anchor, x_anchor = None, None
         figure = plot_snapbot_joint_traj_and_topdown_traj(traj_secs, traj_scale, t_anchor, x_anchor, xy_degs, secs,
                                                 figsize=(16,8), title_str='REWARD: [{:.0f}], X_DIFF: [{:.2f}]'.format(sum(forward_rewards), x_diff), tfs=15)
+    else:
+        figure = None
 
     return {'secs': secs, 'xy_degs':xy_degs, 'forward_rewards': forward_rewards, 'x_diff': x_diff, 'figure': figure}
 
@@ -180,5 +184,4 @@ def plot_snapbot_joint_traj_and_topdown_traj(
     plt.suptitle(title_str,fontsize=tfs)
     if SAVE:
         plt.savefig(image_name)
-
     return figure
