@@ -15,7 +15,7 @@ class DeepLatentPolicyGradientClass(nn.Module):
         actv_dec = nn.ReLU(),        # decoder activation
         actv_q   = nn.Softplus(),    # q activation
         actv_out = None,             # output activation
-        var_max  = None,             # maximum variance
+        var_max  = -1,             # maximum variance
         device   = 'cpu'
         ):
         """
@@ -107,7 +107,7 @@ class DeepLatentPolicyGradientClass(nn.Module):
             net = self.layers['enc_%02d_lin'%(h_idx)](net)
             net = self.layers['enc_%02d_actv'%(h_idx)](net)
         net = self.layers['z_var_lin'](net)
-        if self.var_max is None:
+        if self.var_max == -1:
             net = torch.exp(net)
         else:
             net = self.var_max*torch.sigmoid(net)
@@ -292,7 +292,7 @@ class DeepLatentPolicyGradientClass(nn.Module):
         max_iter   = 100,
         batch_size = 100
         ):
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr, betas=(0.9, 0.99), eps=1e-4)
         loss_sum  = 0
         n_x       = x.shape[0]
         for n_iter in range(max_iter):
@@ -319,7 +319,7 @@ if __name__ == "__main__":
                                         actv_dec = nn.ReLU(),        # decoder activation
                                         actv_q   = nn.Softplus(),    # q activation
                                         actv_out = None,             # output activation
-                                        var_max  = None,             # maximum variance
+                                        var_max  = -1,             # maximum variance
                                         device   = 'cpu'
                                         )
     print(DLPG)
