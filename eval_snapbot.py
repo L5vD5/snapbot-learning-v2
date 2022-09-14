@@ -1,4 +1,4 @@
-import torch, glob
+import torch, glob, os
 import numpy as np
 import matplotlib.image as mpimg
 from class_snapbot import Snapbot4EnvClass
@@ -32,9 +32,10 @@ def eval_snapbot_from_network(env, dur_sec, n_anchor, max_repeat, folder, epoch,
         EvalPolicy.DLPG.load_state_dict(torch.load("dlpg/{}/weights/dlpg_model_weights_{}.pth".format(folder, epoch), map_location='cuda:0'))
     except:
         EvalPolicy.DLPG.load_state_dict(torch.load("dlpg/{}/weights/dlpg_model_weights_{}.pth".format(folder, epoch), map_location='cpu'))
+    EvalPolicy.DLPG.eval()
     traj_joints, traj_secs = EvalPolicy.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0)
     t_anchor, x_anchor = get_anchors_from_traj(traj_secs, traj_joints, n_anchor=EvalPolicy.n_anchor) 
-    n_sample = 2
+    n_sample = 7
     for i in range(n_sample):
         x_anchor = EvalPolicy.DLPG.sample_x(c=torch.FloatTensor(condition).reshape(1,-1).to(EvalPolicy.device), n_sample=1, SKIP_Z_SAMPLE=True).reshape(EvalPolicy.n_anchor, EvalPolicy.env.adim)
         x_anchor = x_anchor.detach().cpu().numpy()
@@ -44,8 +45,6 @@ def eval_snapbot_from_network(env, dur_sec, n_anchor, max_repeat, folder, epoch,
         policy4eval_traj, traj_secs = EvalPolicy.GRPPosterior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0)
         policy4eval_traj = scaleup_traj(EvalPolicy.env, policy4eval_traj, DO_SQUASH=True, squash_margin=5)
         policy4eval = rollout(EvalPolicy.env, EvalPolicy.PID, policy4eval_traj, n_traj_repeat=EvalPolicy.max_repeat, RENDER=RENDER, PLOT=PLOT)
-        eval_secs    = policy4eval['secs']
-        eval_xy_degs = policy4eval['xy_degs']
         eval_reward  = sum(policy4eval['forward_rewards'])
         eval_x_diff  = policy4eval['x_diff']
         eval_figure  = policy4eval['figure']
@@ -56,14 +55,17 @@ def eval_snapbot_from_network(env, dur_sec, n_anchor, max_repeat, folder, epoch,
     rows = n_sample
     cols = 1
     i = 1
-    for filename in glob.glob("*.png"):
+    for idx, filename in enumerate(glob.glob("*.png")):
         img = mpimg.imread(filename)
         ax = fig.add_subplot(rows, cols, i)
         ax.imshow(img)
         plt.axis('off')
         i += 1
+        os.remove(filename)
+        if idx == n_sample-1:
+            break
     plt.show()
 
 if  __name__ == "__main__":
     env = Snapbot4EnvClass(render_mode=None)
-    eval_snapbot_from_network(env=env, dur_sec=2, n_anchor=20, max_repeat=5, folder=11, epoch=250,  condition=[0,1,0], RENDER=True, PLOT=True)
+    eval_snapbot_from_network(env=env, dur_sec=2, n_anchor=20, max_repeat=5, folder=12, epoch=300,  condition=[0,1,0], RENDER=False, PLOT=True)
