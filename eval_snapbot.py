@@ -1,7 +1,7 @@
 import torch, glob, os
 import numpy as np
 import matplotlib.image as mpimg
-from class_snapbot import Snapbot4EnvClass
+from class_snapbot import Snapbot4EnvClass, Snapbot3EnvClass
 from class_policy import SnapbotTrajectoryUpdateClass
 from class_grp import *
 from utils import *
@@ -35,7 +35,7 @@ def eval_snapbot_from_network(env, dur_sec, n_anchor, max_repeat, folder, epoch,
     EvalPolicy.DLPG.eval()
     traj_joints, traj_secs = EvalPolicy.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0)
     t_anchor, x_anchor = get_anchors_from_traj(traj_secs, traj_joints, n_anchor=EvalPolicy.n_anchor) 
-    n_sample = 7
+    n_sample = 1
     for i in range(n_sample):
         x_anchor = EvalPolicy.DLPG.sample_x(c=torch.FloatTensor(condition).reshape(1,-1).to(EvalPolicy.device), n_sample=1, SKIP_Z_SAMPLE=True).reshape(EvalPolicy.n_anchor, EvalPolicy.env.adim)
         x_anchor = x_anchor.detach().cpu().numpy()
@@ -67,5 +67,5 @@ def eval_snapbot_from_network(env, dur_sec, n_anchor, max_repeat, folder, epoch,
     plt.show()
 
 if  __name__ == "__main__":
-    env = Snapbot4EnvClass(render_mode=None)
-    eval_snapbot_from_network(env=env, dur_sec=2, n_anchor=20, max_repeat=5, folder=12, epoch=300,  condition=[0,1,0], RENDER=False, PLOT=True)
+    env = Snapbot3EnvClass(render_mode=None)
+    eval_snapbot_from_network(env=env, dur_sec=2, n_anchor=20, max_repeat=5, folder=15, epoch=300,  condition=[0,1,0], RENDER=True, PLOT=True)
