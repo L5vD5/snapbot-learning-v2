@@ -1,9 +1,9 @@
 import argparse, json
-from class_snapbot import Snapbot4EnvClass
+from class_snapbot import Snapbot4EnvClass, Snapbot3EnvClass
 from class_policy import SnapbotTrajectoryUpdateClass
 
 def main(args):
-    env = Snapbot4EnvClass(render_mode=None)
+    env = Snapbot3EnvClass(render_mode=None)
     SnapbotPolicy = SnapbotTrajectoryUpdateClass(
                                                                 name = "SnapbotTrajectoryUpdateClass",
                                                                 env  = env,

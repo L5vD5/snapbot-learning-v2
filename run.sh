@@ -18,5 +18,5 @@ python main.py \
 --n_sim_prev_consider 10 \
 --n_sim_prev_best_q 50 \
 --init_prior_prob 0.5 \
---folder 14 \
+--folder 16 \
 --wandb True
