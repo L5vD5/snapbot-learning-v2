@@ -303,7 +303,49 @@ class GaussianRandomPathClass():
                 plt.title("%s"%(title_str),fontsize=tfs)
             if subplot_rc is None: plt.show()
         if subplot_rc is not None: plt.show()
-    
+    def set_posterior(
+        self,t_anchor,x_anchor,lbtw,t_test,hyp={'g':1,'l':1/5,'w':1e-8},APPLY_EPSRU=True,t_eps=0.05):
+        """
+            Interpolation
+        """
+        n_test   = t_test.shape[0]
+        l_anchor = lbtw*np.ones(shape=(x_anchor.shape[0],1))
+        l_test   = np.ones((n_test,1))
+        self.set_data(t_anchor=t_anchor,x_anchor=x_anchor,l_anchor=l_anchor,t_test=t_test,l_test=l_test,
+                       hyp_mean=hyp,hyp_var=hyp,
+                       APPLY_EPSRU=APPLY_EPSRU,t_eps=t_eps,SKIP_GP_VAR=False)
+    def set_learnable_prior(
+        self,
+        dur_sec = 2.0,
+        HZ      = 50,
+        hyp     = {'g':1.5,'l':1/2,'w':1e-8},
+        APPLY_EPSRU = True,
+        t_eps = 0.05):
+        """
+            Set GRP prior
+        """
+        # Eps-runup
+        x_anchor = np.array([-0.3184, -0.0233, -0.3655, -0.0642, -0.3229, -0.0995, -0.1925, -0.2505,
+                            -0.1967,  0.0174, -0.5478,  0.4247, -0.9259,  0.5211, -0.9129,  0.3253,
+                            -0.6349, -0.2561, -0.4483, -0.5023, -0.3952, -0.5650, -0.5300, -0.1869,
+                            -0.4309,  0.2683, -0.2869,  0.0921, -0.3818, -0.1703, -0.4887, -0.1936,
+                            -0.3573,  0.0313, -0.1180,  0.1168, -0.2125,  0.0555, -0.3228, -0.0354])
+        x_anchor = x_anchor.reshape(8, 5)
+        x_anchor = np.concatenate((x_anchor, x_anchor[:,0].reshape(-1,1)), axis=1)
+        idx_ls   = []
+        for i in range(6):
+            random_idx = np.random.random_integers(low=0, high=7) 
+            idx_ls.append(random_idx)
+        x_anchor = x_anchor[idx_ls,:]
+        t_anchor = np.linspace(start=0.0,stop=dur_sec,num=x_anchor.shape[1]).reshape((-1,1))
+        l_anchor = np.array([[1,1,1,1,1,1]]).T
+        n_test   = int(dur_sec*HZ)
+        t_test   = np.linspace(start=0.0,stop=dur_sec,num=n_test).reshape((-1,1))
+        l_test   = np.ones((n_test,1))
+        self.set_data(
+            t_anchor=t_anchor,x_anchor=x_anchor,l_anchor=l_anchor,
+            t_test=t_test,l_test=l_test,hyp_mean=hyp,hyp_var=hyp,w_chol=1e-10,APPLY_EPSRU=APPLY_EPSRU,t_eps=t_eps)
+            
     def set_prior(
         self,
         n_data_prior = 4,
@@ -341,35 +383,5 @@ class GaussianRandomPathClass():
 
 if __name__ == "__main__":
     G = GaussianRandomPathClass()
-    # G.set_data(
-    #             t_anchor     = np.linspace(start=0.0,stop=2.0,num=5).reshape((-1,1)),
-    #             x_anchor     = np.random.standard_normal((5,1)),
-    #             l_anchor     = np.ones((5,1)) * 0.8,
-    #             t_test       = np.linspace(start=0.0,stop=2.0,num=200).reshape((-1,1)),
-    #             l_test       = np.ones((200,1)),
-    #             hyp_mean     = None,
-    #             hyp_var      = None,
-    #             w_chol       = 1e-10,     # noise for Cholesky transform
-    #             APPLY_EPSRU  = True,     # epsilon run-up
-    #             t_eps        = 0.0001,
-    #             l_eps        = 1.0,       # leverage for epsilon run-up
-    #             x_diff_start = None,
-    #             x_diff_end   = None,
-    #             SKIP_GP_VAR  = False      # skip GP variance computation
-    #             )
-    # G.set_prior(        
-    #             n_data_prior = 4,
-    #             dim     = 8,
-    #             dur_sec = 3.0,
-    #             HZ      = 50,
-    #             hyp     = {'g':1.5,'l':1/2,'w':1e-8},
-    #             eps_sec = 0.01)
-    G.set_posterior(
-                    t_anchor = np.linspace(start=0, stop=2, num=5).reshape(-1,1),
-                    x_anchor = np.random.standard_normal((5,1)),
-                    lbtw     = 0.9,
-                    t_test   = np.linspace(start=0, stop=2, num=200).reshape(-1,1),
-                    hyp = {'g':1,'l':1/5,'w':1e-8},
-                    APPLY_EPSRU = True,
-                    t_eps = 0.05)
-    G.plot(n_sample=10)
+    G.set_learnable_prior()
+    G.plot(1)
