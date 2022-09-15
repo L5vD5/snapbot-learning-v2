@@ -161,9 +161,9 @@ class SnapbotTrajectoryUpdateClass():
             self.QScaler.update(sim_q_train)
             sim_q_scale, sim_q_offset = self.QScaler.get()
             sim_scaled_q = sim_q_scale * (sim_q_train-sim_q_offset)
-            if start_epoch < 30:
+            if start_epoch < 50:
                 recon_loss_gain = 1
-                beta = 1
+                beta = 0
             else:
                 recon_loss_gain = 1
                 beta = 1
