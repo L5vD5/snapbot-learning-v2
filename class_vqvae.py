@@ -18,10 +18,11 @@ class GumbelQuantizer(nn.Module):
         self.embedding_num    = embedding_num
         self.embedding_dim    = embedding_dim
         self.straight_through = straight_through
-        self.tau_scale = tau_scale
-        self.kld_scale   = kld_scale
-        self.projection  = nn.Linear(z_dim, self.embedding_num)
-        self.embedding   = nn.Embedding(self.embedding_num, embedding_dim)
+        self.tau_scale  = tau_scale
+        self.kld_scale  = kld_scale
+        self.projection = nn.Linear(z_dim, self.embedding_num)
+        self.embedding  = nn.Embedding(self.embedding_num, embedding_dim)
+        self.embedding.weight.data.uniform_(-1/self.embedding_num, 1/self.embedding_num)
 
     def forward(self, z):
         # force hard = True when we are in eval mode, as we must quantize
