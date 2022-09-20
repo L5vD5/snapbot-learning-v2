@@ -46,10 +46,10 @@ class SnapbotTrajectoryUpdateClass():
         self.hyp_prior      = hyp_prior
         self.hyp_poseterior = hyp_posterior
         self.lbtw_base   = lbtw_base
-        try: 
-            self.device  = torch.device('mps')
-        except:
-            self.device  = torch.device('cuda:{}'.format(device_idx) if torch.cuda.is_available() else 'cpu')
+        # try: 
+        #     self.device  = torch.device('mps')
+        # except:
+        self.device  = torch.device('cuda:{}'.format(device_idx) if torch.cuda.is_available() else 'cpu')
         self.VERBOSE     = VERBOSE
         # Set grp & pid & qscaler
         self.PID   = PIDControllerClass(name="PID", k_p=k_p, k_i=k_i, k_d=k_d, dim=self.env.adim, out_min=out_min, out_max=out_max, ANTIWU=ANTIWU)
