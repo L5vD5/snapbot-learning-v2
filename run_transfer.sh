@@ -18,5 +18,5 @@ python main_transfer.py \
 --n_sim_prev_consider 10 \
 --n_sim_prev_best_q 50 \
 --init_prior_prob 0.5 \
---folder 15 \
+--folder 21 \
 --wandb True

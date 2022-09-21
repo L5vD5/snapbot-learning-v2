@@ -37,12 +37,13 @@ class SnapbotTrajectoryUpdateClass():
                 VERBOSE    = True
                 ):
         # Init params
-        self.name        = name
-        self.env         = env
-        self.z_dim       = z_dim
-        self.c_dim       = c_dim
-        self.n_anchor    = n_anchor
-        self.max_repeat  = max_repeat
+        self.name       = name
+        self.env        = env
+        self.z_dim      = z_dim
+        self.c_dim      = c_dim
+        self.n_anchor   = n_anchor
+        self.dur_sec    = dur_sec   
+        self.max_repeat = max_repeat
         self.hyp_prior      = hyp_prior
         self.hyp_poseterior = hyp_posterior
         self.lbtw_base   = lbtw_base
@@ -59,7 +60,6 @@ class SnapbotTrajectoryUpdateClass():
         self.QScaler      = ScalerClass(obs_dim=1)
         self.GRPPrior     = GaussianRandomPathClass(name='GRP Prior')
         self.GRPPosterior = GaussianRandomPathClass(name='GRP Posterior')
-        self.GRPPrior.set_prior(n_data_prior=4, dim=env.adim, dur_sec=dur_sec, HZ=env.hz, hyp=hyp_prior)
         # Set model to device
         self.DLPG.to(self.device)
         # Set explaination
@@ -117,6 +117,7 @@ class SnapbotTrajectoryUpdateClass():
                 else:
                     c = np.array([0,1,0])
                 if (exploration_coin < prior_prob) or (start_epoch < 1):
+                    self.GRPPrior.set_prior(n_data_prior=4, dim=self.env.adim, dur_sec=self.dur_sec, HZ=self.env.hz, hyp=self.hyp_prior)
                     traj_joints, traj_secs = self.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
                     traj_joints_deg = scaleup_traj(self.env, traj_joints, DO_SQUASH=True, squash_margin=5)
                 else:
@@ -218,12 +219,12 @@ if __name__ == "__main__":
                                         seed = 0,
                                         start_epoch = 0,
                                         max_epoch   = 300,
-                                        n_sim_roll          = 50,
-                                        sim_update_size     = 32,
-                                        n_sim_update        = 32,
-                                        n_sim_prev_consider = 50,
+                                        n_sim_roll          = 100,
+                                        sim_update_size     = 64,
+                                        n_sim_update        = 64,
+                                        n_sim_prev_consider = 100,
                                         n_sim_prev_best_q   = 50,
-                                        init_prior_prob = 0.8,
-                                        folder = 19,
-                                        WANDB  = False
+                                        init_prior_prob = 0.5,
+                                        folder = 20,
+                                        WANDB  = True
                                         )
