@@ -141,9 +141,18 @@ class SnapbotTrajectoryUpdateClass():
             sim_q_train = np.array(sim_q_lists[:start_epoch+1]).reshape(-1,1)[:,:n_sim_roll*(start_epoch+1)]
 
             random_integers = np.random.permutation(n_sim_roll*(start_epoch+1))[:n_sim_prev_consider]
-            sim_x_train = sim_x_train[random_integers]
-            sim_c_train = sim_c_train[random_integers]
-            sim_q_train = sim_q_train[random_integers]
+            sim_x_train_rand = sim_x_train[random_integers]
+            sim_c_train_rand = sim_c_train[random_integers]
+            sim_q_train_rand = sim_q_train[random_integers]
+
+            sorted_idx = np.argsort(-sim_q_train.squeeze())
+            sim_x_train_q = sim_x_train[sorted_idx[:n_sim_prev_consider], :]
+            sim_c_train_q = sim_c_train[sorted_idx[:n_sim_prev_consider], :]
+            sim_q_train_q = sim_q_train[sorted_idx[:n_sim_prev_consider]]
+
+            sim_x_train = np.concatenate((sim_x_train_rand, sim_x_train_q), axis=0)
+            sim_c_train = np.concatenate((sim_c_train_rand, sim_c_train_q), axis=0)
+            sim_q_train = np.concatenate((sim_q_train_rand, sim_q_train_q))
 
             self.QScaler.reset()
             self.QScaler.update(sim_q_train)
@@ -218,7 +227,7 @@ if __name__ == "__main__":
     SnapbotTrajectoryUpdateClass.update(
                                         seed = 0,
                                         start_epoch = 0,
-                                        max_epoch   = 300,
+                                        max_epoch   = 500,
                                         n_sim_roll          = 100,
                                         sim_update_size     = 64,
                                         n_sim_update        = 64,
