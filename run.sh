@@ -1,4 +1,5 @@
 python main.py \
+--env 3 \
 --torque 2 \
 --z_dim 32 \
 --c_dim 3 \
@@ -18,5 +19,5 @@ python main.py \
 --n_sim_prev_consider 10 \
 --n_sim_prev_best_q 50 \
 --init_prior_prob 0.5 \
---folder 22 \
+--folder 23 \
 --wandb True

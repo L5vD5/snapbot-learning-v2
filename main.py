@@ -3,7 +3,10 @@ from class_snapbot import Snapbot4EnvClass, Snapbot3EnvClass
 from class_policy import SnapbotTrajectoryUpdateClass
 
 def main(args):
-    env = Snapbot4EnvClass(render_mode=None)
+    if args.env == int(4):
+        env = Snapbot4EnvClass(render_mode=None)
+    if args.env == int(3):
+        env = Snapbot3EnvClass(render_mode=None)
     SnapbotPolicy = SnapbotTrajectoryUpdateClass(
                                                                 name = "SnapbotTrajectoryUpdateClass",
                                                                 env  = env,
@@ -51,6 +54,7 @@ def str2bool(v):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--env", default=4, help="setting for env", type=int)
     parser.add_argument("--torque", default=2, help="setting for max torque", type=float)
     parser.add_argument("--z_dim", default=32, type=int)
     parser.add_argument("--c_dim", default=3, type=int)
