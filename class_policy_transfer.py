@@ -223,7 +223,7 @@ if __name__ == "__main__":
                                                                 z_dim    = 32,
                                                                 c_dim    = 3,
                                                                 h_dims   = [128, 128],
-                                                                var_max  = None,
+                                                                var_max  = -1,
                                                                 n_anchor = 20,
                                                                 dur_sec  = 2,
                                                                 max_repeat    = 5,
@@ -241,7 +241,7 @@ if __name__ == "__main__":
                                         n_sim_update        = 64,
                                         n_sim_prev_consider = 10,
                                         n_sim_prev_best_q   = 50,
-                                        init_prior_prob = 0.5,
-                                        folder = 12,
+                                        init_prior_prob = 0.2,
+                                        folder = 26,
                                         WANDB  = True
                                         )
