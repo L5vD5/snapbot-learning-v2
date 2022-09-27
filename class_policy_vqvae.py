@@ -98,6 +98,9 @@ class SnapbotTrajectoryUpdateClass():
         sim_c_lists = [''] * max_epoch
         sim_q_lists = [''] * max_epoch
 
+        self.workers = [RayRolloutWorkerClass.remote(device=self.device, worker_id=i, env=Snapbot4EnvClass)
+                for i in range(int(n_rollout_worker))]
+
         while start_epoch < max_epoch:
             train_rate        = start_epoch / max_epoch
             exp_decrease_rate = np.exp(-5 * (train_rate**2)) # 1 -> 0
@@ -107,8 +110,6 @@ class SnapbotTrajectoryUpdateClass():
             lbtw       = lbtw * 0.9 # max leverage to be 0.9
             # Ray
             n_rollout_worker = 4
-            self.workers = [RayRolloutWorkerClass.remote(device=self.device, worker_id=i, env=Snapbot4EnvClass)
-                   for i in range(int(n_rollout_worker))]
 
             # Ray loop
             traj_joints, traj_secs = self.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
@@ -126,6 +127,7 @@ class SnapbotTrajectoryUpdateClass():
                     sim_x_list[sim_idx+loop_idx*n_rollout_worker, :] = np.copy(result_generate_trajectory[sim_idx]['x_anchor'].reshape(1, -1))
                     sim_c_list[sim_idx+loop_idx*n_rollout_worker, :] = np.copy(result_generate_trajectory[sim_idx]['c'])
                     sim_q_list[sim_idx+loop_idx*n_rollout_worker]    = np.copy(sum(result_rollout[sim_idx]['forward_rewards']))
+                print(sim_q_list)
 
             sim_x_lists[start_epoch] = np.copy(sim_x_list)
             sim_c_lists[start_epoch] = np.copy(sim_c_list)
@@ -241,7 +243,7 @@ if __name__ == "__main__":
                                         start_epoch = 0,
                                         max_epoch   = 300,
                                         n_sim_roll          = 100,
-                                        sim_update_size     = 64,
+                                        sim_update_size     = 250,
                                         n_sim_update        = 64,
                                         n_sim_prev_consider = 10,
                                         n_sim_prev_best_q   = 50,
