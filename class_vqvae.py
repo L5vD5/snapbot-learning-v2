@@ -46,12 +46,14 @@ class VectorQuantizedVariationalAutoEncoder(nn.Module):
         embedding_num   = 10,        # For VQ parameters
         embedding_dim   = 3,         # For VQ parameters
         tau_scale = 1.0,             # For VQ parameters
-        kld_scale = 5e-4,            # For VQ parameters 
-        actv_enc = nn.ReLU(),        # encoder activation
-        actv_dec = nn.ReLU(),        # decoder activation
-        actv_q   = nn.Softplus(),    # q activation
-        actv_out = None,             # output activation
-        device   = 'cpu'
+        kld_scale   = 5e-4,            # For VQ parameters 
+        actv_enc    = nn.ReLU(),        # encoder activation
+        actv_dec    = nn.ReLU(),        # decoder activation
+        actv_q      = nn.Softplus(),    # q activation
+        actv_out    = None,             # output activation
+        device      = 'cpu',
+        lr          = 2e-2,
+        eps         = 1e-8
         ):
         """
             Initialize
@@ -76,6 +78,9 @@ class VectorQuantizedVariationalAutoEncoder(nn.Module):
         # Initialize layers
         self.init_layers()
         self.init_params()
+        print("lr:", lr, "eps: ", eps)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, betas=(0.9, 0.99), eps=eps)
+
                 
     def init_layers(self):
         """
@@ -274,12 +279,10 @@ class VectorQuantizedVariationalAutoEncoder(nn.Module):
         x  = torch.randn(2,784),
         c  = torch.randn(2,10),
         q  = torch.ones(2),
-        lr = 0.001,
         recon_loss_gain = 1,
         max_iter   = 100,
         batch_size = 100
         ):
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr, betas=(0.9, 0.99), eps=1e-4)
         loss_sum  = 0
         n_x       = x.shape[0]
         for n_iter in range(max_iter):
@@ -288,9 +291,10 @@ class VectorQuantizedVariationalAutoEncoder(nn.Module):
             x_batch    = torch.FloatTensor(x[rand_idx, :]).to(self.device)
             c_batch    = torch.FloatTensor(c[rand_idx, :]).to(self.device)
             q_batch    = torch.FloatTensor(q[rand_idx]).to(self.device)
-            total_loss, _ = self.loss_total(x=x_batch, c=c_batch, q=q_batch, LOSS_TYPE='L2', recon_loss_gain=recon_loss_gain)
+            total_loss, info = self.loss_total(x=x_batch, c=c_batch, q=q_batch, LOSS_TYPE='L2', recon_loss_gain=recon_loss_gain)
             loss_sum += total_loss.item()
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             total_loss.backward()
-            optimizer.step()
+            self.optimizer.step()
+            # print(info)
         return loss_sum / max_iter
