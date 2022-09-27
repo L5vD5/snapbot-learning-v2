@@ -9,6 +9,8 @@ from utils import *
 from class_pid import PIDControllerClass
 from class_grp import GaussianRandomPathClass, scaleup_traj, get_anchors_from_traj
 from class_dlpg import DeepLatentPolicyGradientClass
+from class_ray import RayRolloutWorkerClass
+import ray
 
 class SnapbotTrajectoryUpdateClass():
     def __init__(self,
@@ -45,7 +47,7 @@ class SnapbotTrajectoryUpdateClass():
         self.dur_sec    = dur_sec   
         self.max_repeat = max_repeat
         self.hyp_prior      = hyp_prior
-        self.hyp_poseterior = hyp_posterior
+        self.hyp_posterior = hyp_posterior
         self.lbtw_base   = lbtw_base
         # try: 
         #     self.device  = torch.device('mps')
@@ -103,38 +105,31 @@ class SnapbotTrajectoryUpdateClass():
             prior_prob = init_prior_prob * exp_decrease_rate # Schedule eps-greedish (init_prior_prob -> 0)
             lbtw       = self.lbtw_base + (1-self.lbtw_base)*exp_increase_rate # Schedule leveraged GRP (0.8 -> 1.0)
             lbtw       = lbtw * 0.9 # max leverage to be 0.9
+            # Ray
+            n_rollout_worker = 4
+            self.workers = [RayRolloutWorkerClass.remote(device=self.device, worker_id=i, env=Snapbot4EnvClass)
+                   for i in range(int(n_rollout_worker))]
 
-            for sim_idx in range(n_sim_roll):
-                exploration_coin = np.random.rand()
-                if self.env.condition is not None:
-                    condition_coin = np.random.uniform(0, 1)
-                    if condition_coin >= 0.7:
-                        c = np.array([1,0,0])
-                    elif condition_coin >= 0.3:
-                        c = np.array([0,1,0])
-                    else:
-                        c = np.array([0,0,1])
-                else:
-                    c = np.array([0,1,0])
-                if (exploration_coin < prior_prob) or (start_epoch < 1):
-                    self.GRPPrior.set_prior(n_data_prior=4, dim=self.env.adim, dur_sec=self.dur_sec, HZ=self.env.hz, hyp=self.hyp_prior)
-                    traj_joints, traj_secs = self.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
-                    traj_joints_deg = scaleup_traj(self.env, traj_joints, DO_SQUASH=True, squash_margin=5)
-                else:
-                    x_anchor = self.DLPG.sample_x(c=torch.FloatTensor(c).reshape(1,-1).to(self.device), n_sample=1).reshape(self.n_anchor, self.env.adim)
-                    x_anchor[-1,:] = x_anchor[0,:]
-                    self.GRPPosterior.set_posterior(t_anchor, x_anchor,lbtw=lbtw, t_test=traj_secs, hyp=self.hyp_poseterior, APPLY_EPSRU=True, t_eps=0.025)
-                    traj_joints, _ = self.GRPPosterior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
-                    traj_joints_deg = scaleup_traj(self.env, np.array(traj_joints), DO_SQUASH=True, squash_margin=5)
-                t_anchor, x_anchor = get_anchors_from_traj(traj_secs, traj_joints, n_anchor=self.n_anchor) 
-                result = rollout(self.env, self.PID, traj_joints_deg, n_traj_repeat=self.max_repeat)
-                sim_x_list[sim_idx, :] = x_anchor.reshape(1,-1)
-                sim_c_list[sim_idx, :] = c
-                sim_q_list[sim_idx]    = sum(result['forward_rewards'])
-            
-            sim_x_lists[start_epoch] = sim_x_list
-            sim_c_lists[start_epoch] = sim_c_list
-            sim_q_lists[start_epoch] = sim_q_list
+            # Ray loop
+            traj_joints, traj_secs = self.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
+            n_test = len(traj_secs)
+            idxs = np.round(np.linspace(start=0,stop=n_test-1,num=20)).astype(np.int16)
+            t_anchor = traj_secs[idxs]
+
+            for loop_idx in range(int(n_sim_roll/n_rollout_worker)):
+                generate_trajectory_ray = [worker.generate_trajectory.remote(DLPG=self.DLPG, lbtw=lbtw, GRPPrior=self.GRPPrior, GRPPosterior=self.GRPPosterior, n_anchor=self.n_anchor, t_anchor=t_anchor, traj_secs=traj_secs, prior_prob=prior_prob, start_epoch=start_epoch, dur_sec=self.dur_sec, hyp_prior=self.hyp_prior, hyp_posterior=self.hyp_posterior) for worker in self.workers]
+                result_generate_trajectory = ray.get(generate_trajectory_ray)
+                rollout_ray = [worker.rollout.remote(self.PID, result_generate_trajectory[i]['traj_joints_deg'], n_traj_repeat=self.max_repeat, RENDER=False) for i, worker in enumerate(self.workers)]
+                result_rollout = ray.get(rollout_ray)
+                # print(result_rollout)
+                for sim_idx in range(n_rollout_worker):
+                    sim_x_list[sim_idx+loop_idx*n_rollout_worker, :] = np.copy(result_generate_trajectory[sim_idx]['x_anchor'].reshape(1, -1))
+                    sim_c_list[sim_idx+loop_idx*n_rollout_worker, :] = np.copy(result_generate_trajectory[sim_idx]['c'])
+                    sim_q_list[sim_idx+loop_idx*n_rollout_worker]    = np.copy(sum(result_rollout[sim_idx]['forward_rewards']))
+
+            sim_x_lists[start_epoch] = np.copy(sim_x_list)
+            sim_c_lists[start_epoch] = np.copy(sim_c_list)
+            sim_q_lists[start_epoch] = np.copy(sim_q_list)
 
             for n_prev_idx in range(n_sim_prev_consider):
                 if n_prev_idx == 0:
@@ -142,10 +137,11 @@ class SnapbotTrajectoryUpdateClass():
                     sim_c_list_bundle = sim_c_list
                     sim_q_list_bundle = sim_q_list
                 else:
-                    sim_x_list_bundle = np.concatenate((sim_x_list_bundle, sim_x_lists[max(0, start_epoch-n_prev_idx)]), axis=0)
-                    sim_c_list_bundle = np.concatenate((sim_c_list_bundle, sim_c_lists[max(0, start_epoch-n_prev_idx)]), axis=0)
-                    sim_q_list_bundle = np.concatenate((sim_q_list_bundle, sim_q_lists[max(0, start_epoch-n_prev_idx)]))
-            
+                    if start_epoch - n_prev_idx < 1:
+                        break
+                    sim_x_list_bundle = np.concatenate((sim_x_list_bundle, sim_x_lists[start_epoch-n_prev_idx]), axis=0)
+                    sim_c_list_bundle = np.concatenate((sim_c_list_bundle, sim_c_lists[start_epoch-n_prev_idx]), axis=0)
+                    sim_q_list_bundle = np.concatenate((sim_q_list_bundle, sim_q_lists[start_epoch-n_prev_idx]))
             sorted_idx  = np.argsort(-sim_q_list_bundle)
             sim_x_train = sim_x_list_bundle[sorted_idx[:n_sim_prev_best_q], :]
             sim_c_train = sim_c_list_bundle[sorted_idx[:n_sim_prev_best_q], :]
@@ -162,17 +158,17 @@ class SnapbotTrajectoryUpdateClass():
             sim_x_train = np.concatenate((sim_x_train, sim_x_rand), axis=0)
             sim_c_train = np.concatenate((sim_c_train, sim_c_rand), axis=0)
             sim_q_train = np.concatenate((sim_q_train, sim_q_rand))
-
             self.QScaler.reset()
             self.QScaler.update(sim_q_train)
             sim_q_scale, sim_q_offset = self.QScaler.get()
             sim_scaled_q = sim_q_scale * (sim_q_train-sim_q_offset)
-            loss = self.DLPG.update(x=sim_x_train, c=sim_c_train, q=sim_scaled_q, lr=0.001, 
+            loss = self.DLPG.update(x=sim_x_train, c=sim_c_train, q=sim_scaled_q,
                                     recon_loss_gain=1, max_iter=n_sim_update, batch_size=sim_update_size)
             # For eval
-            x_anchor = self.DLPG.sample_x(c=torch.FloatTensor(c).reshape(1,-1).to(self.device), n_sample=1).reshape(self.n_anchor, self.env.adim)
+            c = torch.FloatTensor([0, 1, 0])
+            x_anchor = self.DLPG.sample_x(c=c.reshape(1,-1).to(self.device), n_sample=1).reshape(self.n_anchor, self.env.adim)
             x_anchor[-1,:] = x_anchor[0,:]
-            self.GRPPosterior.set_posterior(t_anchor, x_anchor, lbtw=0.9, t_test=traj_secs, hyp=self.hyp_poseterior, APPLY_EPSRU=True, t_eps=0.025)
+            self.GRPPosterior.set_posterior(t_anchor, x_anchor, lbtw=0.9, t_test=traj_secs, hyp=self.hyp_posterior, APPLY_EPSRU=True, t_eps=0.025)
             policy4eval_traj   = self.GRPPosterior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0)[0]
             policy4eval_traj   = scaleup_traj(self.env, policy4eval_traj, DO_SQUASH=True, squash_margin=5)
             t_anchor, x_anchor = get_anchors_from_traj(traj_secs, policy4eval_traj, n_anchor=self.n_anchor)  
@@ -184,13 +180,20 @@ class SnapbotTrajectoryUpdateClass():
 
             # For wandb
             if WANDB:
-                wandb.log({"sim_reward": eval_reward, "sim_x_diff": eval_x_diff, "DLPG_loss": loss})
+                wandb.log({"sim_reward": eval_reward, "sim_x_diff": eval_x_diff, "DLPG_loss": loss, "prior_prob": prior_prob})
 
             # Save model weights
-            if (start_epoch+1) % 50 == 0 and start_epoch != 0:
+            if (start_epoch+1) % 10 == 0 and start_epoch != 0:
                 if not os.path.exists("dlpg/{}/weights".format(folder)):
                     os.makedirs("dlpg/{}/weights".format(folder))
+                if not os.path.exists("dlpg/{}/batch".format(folder)):
+                    os.makedirs("dlpg/{}/batch".format(folder))
+
                 torch.save(self.DLPG.state_dict(), 'dlpg/{}/weights/dlpg_model_weights_{}.pth'.format(folder, start_epoch+1))
+                torch.save(sim_x_train, 'dlpg/{}/batch/x_{}.pth'.format(folder, start_epoch+1))
+                torch.save(sim_c_train, 'dlpg/{}/batch/c_{}.pth'.format(folder, start_epoch+1))
+                torch.save(sim_scaled_q, 'dlpg/{}/batch/scaled_q_{}.pth'.format(folder, start_epoch+1))
+
 
             # For printing evaluation of present policy
             if (start_epoch+1) % 5 == 0 and start_epoch != 0:
@@ -243,6 +246,6 @@ if __name__ == "__main__":
                                         n_sim_prev_consider = 10,
                                         n_sim_prev_best_q   = 50,
                                         init_prior_prob = 0.5,
-                                        folder = 19,
+                                        folder = 2003,
                                         WANDB  = True
                                         )
