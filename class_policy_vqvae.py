@@ -52,7 +52,7 @@ class SnapbotTrajectoryUpdateClass():
         # try: 
         #     self.device  = torch.device('mps')
         # except:
-        self.device  = torch.device('cuda:{}'.format(device_idx) if torch.cuda.is_available() else 'cpu')
+        self.device  = torch.device("cpu")#torch.device('cuda:{}'.format(device_idx) if torch.cuda.is_available() else 'cpu')
         self.VERBOSE     = VERBOSE
         # Set grp & pid & qscaler
         self.PID   = PIDControllerClass(name="PID", k_p=k_p, k_i=k_i, k_d=k_d, dim=self.env.adim, out_min=out_min, out_max=out_max, ANTIWU=ANTIWU)
@@ -88,7 +88,7 @@ class SnapbotTrajectoryUpdateClass():
 
         # Set wandb 
         if WANDB:
-            wandb.init(project="snapbot_sim", entity="hansooworld")
+            wandb.init(project="Snapbot-Meta-RL", entity="l5vd5")
 
         # Set buffer
         sim_x_list  = np.zeros((n_sim_roll, self.env.adim*self.n_anchor))
@@ -98,8 +98,16 @@ class SnapbotTrajectoryUpdateClass():
         sim_c_lists = [''] * max_epoch
         sim_q_lists = [''] * max_epoch
 
+        # Ray
+        n_rollout_worker = 100
         self.workers = [RayRolloutWorkerClass.remote(device=self.device, worker_id=i, env=Snapbot4EnvClass)
                 for i in range(int(n_rollout_worker))]
+
+        # GRP parameter
+        traj_joints, traj_secs = self.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
+        n_test = len(traj_secs)
+        idxs = np.round(np.linspace(start=0,stop=n_test-1,num=20)).astype(np.int16)
+        t_anchor = traj_secs[idxs]
 
         while start_epoch < max_epoch:
             train_rate        = start_epoch / max_epoch
@@ -108,15 +116,8 @@ class SnapbotTrajectoryUpdateClass():
             prior_prob = init_prior_prob * exp_decrease_rate # Schedule eps-greedish (init_prior_prob -> 0)
             lbtw       = self.lbtw_base + (1-self.lbtw_base)*exp_increase_rate # Schedule leveraged GRP (0.8 -> 1.0)
             lbtw       = lbtw * 0.9 # max leverage to be 0.9
-            # Ray
-            n_rollout_worker = 4
 
-            # Ray loop
-            traj_joints, traj_secs = self.GRPPrior.sample_one_traj(rand_type='Uniform', ORG_PERTURB=True, perturb_gain=0.0) 
-            n_test = len(traj_secs)
-            idxs = np.round(np.linspace(start=0,stop=n_test-1,num=20)).astype(np.int16)
-            t_anchor = traj_secs[idxs]
-
+            # Ray loop (rollout)
             for loop_idx in range(int(n_sim_roll/n_rollout_worker)):
                 generate_trajectory_ray = [worker.generate_trajectory.remote(DLPG=self.DLPG, lbtw=lbtw, GRPPrior=self.GRPPrior, GRPPosterior=self.GRPPosterior, n_anchor=self.n_anchor, t_anchor=t_anchor, traj_secs=traj_secs, prior_prob=prior_prob, start_epoch=start_epoch, dur_sec=self.dur_sec, hyp_prior=self.hyp_prior, hyp_posterior=self.hyp_posterior) for worker in self.workers]
                 result_generate_trajectory = ray.get(generate_trajectory_ray)
@@ -127,7 +128,7 @@ class SnapbotTrajectoryUpdateClass():
                     sim_x_list[sim_idx+loop_idx*n_rollout_worker, :] = np.copy(result_generate_trajectory[sim_idx]['x_anchor'].reshape(1, -1))
                     sim_c_list[sim_idx+loop_idx*n_rollout_worker, :] = np.copy(result_generate_trajectory[sim_idx]['c'])
                     sim_q_list[sim_idx+loop_idx*n_rollout_worker]    = np.copy(sum(result_rollout[sim_idx]['forward_rewards']))
-                print(sim_q_list)
+                # print(sim_q_list)
 
             sim_x_lists[start_epoch] = np.copy(sim_x_list)
             sim_c_lists[start_epoch] = np.copy(sim_c_list)
@@ -235,7 +236,7 @@ if __name__ == "__main__":
                                                                 hyp_prior     = {'g': 1/1, 'l': 1/8, 'w': 1e-8},
                                                                 hyp_posterior = {'g': 1/4, 'l': 1/8, 'w': 1e-8},
                                                                 lbtw_base     = 0.8,
-                                                                device_idx = 0,
+                                                                device_idx = 1,
                                                                 VERBOSE    = True
                                                                 )
     SnapbotTrajectoryUpdateClass.update(
@@ -243,7 +244,7 @@ if __name__ == "__main__":
                                         start_epoch = 0,
                                         max_epoch   = 300,
                                         n_sim_roll          = 100,
-                                        sim_update_size     = 250,
+                                        sim_update_size     = 64,
                                         n_sim_update        = 64,
                                         n_sim_prev_consider = 10,
                                         n_sim_prev_best_q   = 50,
